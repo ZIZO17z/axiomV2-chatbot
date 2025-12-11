@@ -373,4 +373,5 @@ async function getGeminiResponse(userText, imageBase64, imageMime) {
             delay *= 2;
         }
     }
+
 }

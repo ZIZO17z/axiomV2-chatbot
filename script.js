@@ -1,5 +1,4 @@
-
-const apiKey = 'AIzaSyD5zrNtvWz839V914eyOGQIRrZH8fAGFGA';
+const apiKey = "AIzaSyDQ2nH3oFCvAS1ACaGVBwXitScIdJ5FB0M";
 const chatList = document.querySelector('.chat-content');
 const typingForm = document.getElementById('typingForm');
 const userInput = document.getElementById('userInput');
@@ -10,29 +9,23 @@ const previewImg = document.querySelector('.image-preview-container img');
 const fileInput = document.getElementById('fileInput');
 const graphInput = document.getElementById('graphInput');
 
-
 let isFirstMessage = true;
 let currentImageBase64 = null;
 let currentImageMimeType = null;
 let chartInstance = null;
 
-
+const systemInstructionText = `
+    You are the "Sci-Compute Ultimate Engine". You are a high-level scientific analysis tool, not a chatbot.
+    
+    DIRECTIVES:
+    1. **DOMAIN:** Strictly Physics and Mathematics. Refuse all else with a brief, polite refusal related to the domain restriction.
+    2. **VISION:** If an image is provided, analyze the math problem, diagram, or physics setup in the image and solve/explain it meticulously.
+    3. **TONE:** Academic, rigorous, objective.
+    4. **FORMAT:** Markdown for text. LaTeX ($...$ and $$...$$) for ALL mathematical equations, symbols, and formulas.
+    5. **GRAPHING:** If the user asks to graph a function (e.g., "graph y=x^2"), output [[GRAPH: y=x^2]] as the first line of your response. Use standard math notation compatible with math.js.
+`;
 
 let chatHistory = [
-    {
-        role: "user",
-        parts: [{ text: `
-            SYSTEM INSTRUCTIONS:
-            You are the "Sci-Compute Ultimate Engine". You are a high-level scientific analysis tool, not a chatbot.
-            
-            DIRECTIVES:
-            1. **DOMAIN:** Strictly Physics and Mathematics. Refuse all else.
-            2. **VISION:** If an image is provided, analyze the math problem, diagram, or physics setup in the image and solve/explain it meticulously.
-            3. **TONE:** Academic, rigorous, objective.
-            4. **FORMAT:** Markdown for text. LaTeX ($...$ and $$...$$) for ALL math.
-            5. **GRAPHING:** If the user asks to graph a function (e.g., "graph y=x^2"), output [[GRAPH: y=x^2]] as the first line of your response. Use standard math notation compatible with math.js.
-        ` }]
-    },
     {
         role: "model",
         parts: [{ text: "Engine Online. Vision System Active. Ready for input." }]
@@ -44,8 +37,6 @@ window.onload = function() {
     initGraph();
     document.addEventListener('paste', handlePaste);
 };
-
-
 
 function handlePaste(e) {
     const items = (e.clipboardData || e.originalEvent.clipboardData).items;
@@ -60,11 +51,8 @@ function handlePaste(e) {
     }
 }
 
-
-
 function processFile(file) {
     if (!file || !file.type.startsWith('image/')) return;
-
 
     const reader = new FileReader();
     reader.onload = function(e) {
@@ -76,12 +64,15 @@ function processFile(file) {
     reader.readAsDataURL(file);
 }
 
-
-
 function initGraph() {
     const ctx = document.getElementById('miniGraph').getContext('2d');
     const xValues = Array.from({length: 40}, (_, i) => i/2 - 10);
     const yValues = xValues.map(x => x*x);
+
+    if (typeof Chart === 'undefined') {
+        console.error("Chart.js not loaded. Cannot initialize graph.");
+        return;
+    }
 
     chartInstance = new Chart(ctx, {
         type: 'line',
@@ -127,27 +118,39 @@ function initGraph() {
     });
 }
 
-
-
 function updateGraph(eq) {
-    if (!chartInstance) return;
+    if (!chartInstance || typeof math === 'undefined') return;
     try {
         const expr = eq.split('=')[1] || eq;
         const node = math.parse(expr);
         const code = node.compile();
-        const xValues = Array.from({length: 40}, (_, i) => i/2 - 10);
-        const yValues = xValues.map(x => {
-            try { return code.evaluate({x}); } catch { return 0; }
-        });
-        chartInstance.data.datasets[0].data = yValues;
+        
+        const xMin = -10;
+        const xMax = 10;
+        const numPoints = 100;
+        
+        const xValues = Array.from({length: numPoints}, (_, i) => xMin + i * ((xMax - xMin) / (numPoints - 1)));
+        
+        const dataPoints = xValues.map(x => {
+            let y;
+            try { 
+                y = code.evaluate({x}); 
+                if (Math.abs(y) > 1000) y = NaN;
+            } catch { 
+                y = NaN; 
+            }
+            return { x: x, y: y };
+        }).filter(p => isFinite(p.y));
+
+        chartInstance.data.datasets[0].data = dataPoints.map(p => p.y); 
+        chartInstance.data.labels = dataPoints.map(p => p.x.toFixed(2));
+        chartInstance.data.datasets[0].label = eq;
         chartInstance.update();
         graphInput.value = eq;
     } catch (e) {
-        console.log("Graph error: " + e.message);
+        console.error("Graph parsing error: " + e.message);
     }
 }
-
-
 
 function insertMath(latex) {
     userInput.value += latex;
@@ -158,7 +161,6 @@ function handleFileSelect(event) {
     processFile(event.target.files[0]);
 }
 
-
 function clearImage() {
     fileInput.value = '';
     currentImageBase64 = null;
@@ -167,12 +169,10 @@ function clearImage() {
     previewImg.src = '';
 }
 
-
 typingForm.addEventListener('submit', (e) => {
     e.preventDefault();
     handleSubmission();
 });
-
 
 async function handleSubmission() {
     const text = userInput.value.trim();
@@ -190,7 +190,6 @@ async function handleSubmission() {
 
     addMessage(displayContent, 'user', false);
 
-
     userInput.value = '';
     const imageToSend = currentImageBase64;
     const mimeToSend = currentImageMimeType;
@@ -205,13 +204,13 @@ async function handleSubmission() {
         addMessage(response, 'bot', true);
     } catch (error) {
         removeMessage(loadingId);
-        addMessage('System Error: Computation failed. ' + error.message, 'bot', false);
+        addMessage('System Error: ' + error.message, 'bot', false);
+        console.error("Full error details:", error);
     } finally {
         setLoading(false);
         userInput.focus();
     }
 }
-
 
 function fillAndSend(text) {
     userInput.value = text;
@@ -229,7 +228,6 @@ function addMessage(content, sender, useTypingEffect = false) {
             cleanContent = cleanContent.replace(graphMatch[0], '').trim();
         }
     }
-
 
     const div = document.createElement("div");
     div.classList.add('message', sender);
@@ -259,7 +257,6 @@ function addMessage(content, sender, useTypingEffect = false) {
     scrollToBottom();
 }
 
-
 async function streamText(element, text) {
     const chunks = text.split(/(\s+)/);
     let currentMarkdown = "";
@@ -276,25 +273,25 @@ async function streamText(element, text) {
     finalizeMessage(element.parentElement.parentElement, element);
 }
 
-
-
 function finalizeMessage(messageDiv, contentElement) {
-    renderMathInElement(contentElement, {
-        delimiters: [
-            {left: '$$', right: '$$', display: true},
-            {left: '$', right: '$', display: false}
-        ],
-        throwOnError: false
-    });
+    if (typeof renderMathInElement !== 'undefined') {
+        renderMathInElement(contentElement, {
+            delimiters: [
+                {left: '$$', right: '$$', display: true},
+                {left: '$', right: '$', display: false}
+            ],
+            throwOnError: false
+        });
+    }
     
     messageDiv.querySelectorAll('pre code').forEach((block) => {
-        hljs.highlightElement(block);
+        if (typeof hljs !== 'undefined') {
+            hljs.highlightElement(block);
+        }
     });
 
     scrollToBottom();
 }
-
-
 
 function addLoadingIndicator() {
     const id = 'loading-' + Date.now();
@@ -315,8 +312,6 @@ function addLoadingIndicator() {
     return id;
 }
 
-
-
 function removeMessage(id) {
     const el = document.getElementById(id);
     if (el) el.remove();
@@ -327,31 +322,32 @@ function setLoading(isLoading) {
     sendBtn.disabled = isLoading;
 }
 
-
 function scrollToBottom() {
     chatContainer.scrollTop = chatContainer.scrollHeight;
 }
 
 async function getGeminiResponse(userText, imageBase64, imageMime) {
-    const userPart = { text: userText || "Analyze this image." };
-
-    if (imageBase64) {
-        chatHistory.push({
-            role: 'user',
-            parts: [
-                userPart,
-                { inlineData: { mimeType: imageMime, data: imageBase64 } }
-            ]
-        });
+    const userParts = [];
+    if (userText) {
+        userParts.push({ text: userText });
     } else {
-        chatHistory.push({ role: 'user', parts: [userPart] });
+        userParts.push({ text: "Analyze this image." });
+    }
+    if (imageBase64) {
+        userParts.push({ inlineData: { mimeType: imageMime, data: imageBase64 } });
     }
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+    chatHistory.push({ role: 'user', parts: userParts });
+
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
     
-
-
-    const payload = { contents: chatHistory };
+    const payload = { 
+        contents: chatHistory, 
+        systemInstruction: {
+            parts: [{ text: systemInstructionText }]
+        }
+    };
+    
     let delay = 1000;
     for (let i = 0; i < 3; i++) {
         try {
@@ -360,20 +356,29 @@ async function getGeminiResponse(userText, imageBase64, imageMime) {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
-            if (!res.ok) throw new Error(res.statusText);
+            
+            if (!res.ok) {
+                const errText = await res.text();
+                console.error(`API Error on attempt ${i + 1}: Status ${res.status}`, errText);
+                if (res.status >= 400 && res.status < 500) {
+                     throw new Error(`Client Error: ${res.status}. Check request format or API key permissions.`);
+                }
+                throw new Error(`HTTP Error: ${res.status}`);
+            }
             
             const data = await res.json();
             const botText = data.candidates?.[0]?.content?.parts?.[0]?.text || "No response.";
             
-            
             chatHistory.push({ role: "model", parts: [{ text: botText }] });
             return botText;
         } catch (e) {
-            if (i === 2) throw e;
+            if (i === 2) {
+                console.error("Final API call failed:", e);
+                throw new Error(`Failed to get response: ${e.message}`);
+            }
             await new Promise(r => setTimeout(r, delay));
             delay *= 2;
         }
     }
-
+    throw new Error("API request failed after multiple retries.");
 }
-

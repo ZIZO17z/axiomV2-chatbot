@@ -1,3 +1,4 @@
+
 const apiKey = 'AIzaSyD5zrNtvWz839V914eyOGQIRrZH8fAGFGA';
 const chatList = document.querySelector('.chat-content');
 const typingForm = document.getElementById('typingForm');
